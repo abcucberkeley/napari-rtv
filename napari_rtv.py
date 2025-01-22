@@ -561,38 +561,39 @@ def is_file_old_enough(file_path, newest_mod_time, min_age_seconds=60):
 
 
 @thread_worker
-def new_files(folder_path, channel_patterns, loaded_z_files, min_age_seconds, data, layers, max_timepoints):
+def new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, data, layers, max_timepoints):
     # Monitor folder for new files
     while napari.current_viewer() is not None:
-        for channel_pattern in channel_patterns:
-            newest_mod_time = get_newest_mod_time(folder_path, channel_pattern)
+        for folder_path in folder_paths:
+            for channel_pattern in channel_patterns:
+                newest_mod_time = get_newest_mod_time(folder_path, channel_pattern)
 
-            if newest_mod_time:
-                new_z_files = {
-                    f for f in Path(folder_path).glob('*' + channel_pattern + '*.tif')
-                    if f not in loaded_z_files and is_file_old_enough(f, newest_mod_time, min_age_seconds)
-                }
-                if new_z_files:
-                    print(f"New Z-stacks found: {new_z_files}")
-                    loaded_z_files.update(new_z_files)
+                if newest_mod_time:
+                    new_z_files = {
+                        f for f in Path(folder_path).glob('*' + channel_pattern + '*.tif')
+                        if f not in loaded_z_files and is_file_old_enough(f, newest_mod_time, min_age_seconds)
+                    }
+                    if new_z_files:
+                        print(f"New Z-stacks found: {new_z_files}")
+                        loaded_z_files.update(new_z_files)
 
-                    # Load only the new files and update combined data
-                    if channel_pattern in data:
-                        new_data = load_z_stack(new_z_files)
-                        data[channel_pattern] = np.concatenate((data[channel_pattern], new_data),
-                                                               axis=0)  # Append new data to combined_data
-                    else:
-                        data[channel_pattern] = load_z_stack(new_z_files)
-                    if data[channel_pattern].shape[0] > max_timepoints:
-                        data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
-                    if channel_pattern in layers:
-                        layers[channel_pattern].data = data[channel_pattern]
-                    else:
-                        layer_update = {'channel_pattern': channel_pattern, 'data': data[channel_pattern]}
-                        layer = yield layer_update
-                        layers[channel_pattern] = layer
+                        # Load only the new files and update combined data
+                        if channel_pattern in data:
+                            new_data = load_z_stack(new_z_files)
+                            data[channel_pattern] = np.concatenate((data[channel_pattern], new_data),
+                                                                   axis=0)  # Append new data to combined_data
+                        else:
+                            data[channel_pattern] = load_z_stack(new_z_files)
+                        if data[channel_pattern].shape[0] > max_timepoints:
+                            data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
+                        if channel_pattern in layers:
+                            layers[channel_pattern].data = data[channel_pattern]
+                        else:
+                            layer_update = {'channel_pattern': channel_pattern, 'data': data[channel_pattern]}
+                            layer = yield layer_update
+                            layers[channel_pattern] = layer
 
-                    # yield i, data[i]
+                        # yield i, data[i]
 
         time.sleep(1)  # Adjust interval as needed
 
@@ -641,16 +642,18 @@ def crop_3d_with_bounding_box(image_layer, layer, mip_size):
 if __name__ == "__main__":
     # Parse arguments
     ap = argparse.ArgumentParser()
-    ap.add_argument('--folder-path', type=str, required=True, help="Path to the folder containing Z-stacks.")
+    ap.add_argument('--folder-paths', type=lambda s: list(map(Path, s.split(','))), required=True,
+                    help="Paths to the folder containing Z-stacks separated by comma")
     ap.add_argument('--channel-patterns', type=lambda s: list(map(str, s.split(','))), required=True,
                     help="Channel patterns separated by comma")
     ap.add_argument('--voxel-resolution', type=lambda s: tuple(map(int, s.split(','))), required=True,
-                    help="Voxel resolution as y,x,z in nm.")
+                    help="Voxel resolution as z,y,x in nm.")
     ap.add_argument('--max-timepoints', type=int, default=500,
                     help="The max amount of timepoints that will be displayed at a time.")
     args = ap.parse_args()
 
-    folder_path = Path(args.folder_path)
+    #folder_path = Path(args.folder_path)
+    folder_paths = args.folder_paths
     channel_patterns = args.channel_patterns
     if len(args.voxel_resolution) != 3:
         ap.error("Voxel resolution must have exactly three values (y,x,z).")
@@ -684,34 +687,35 @@ if __name__ == "__main__":
     # channel_patterns = ['*' + channel_pattern + '*.tif' for channel_pattern in channel_patterns]
 
     # Initial load with all existing files
-    for channel_pattern in channel_patterns:
-        newest_mod_time = get_newest_mod_time(folder_path, channel_pattern)
-        if newest_mod_time:
-            initial_files = [
-                f for f in Path(folder_path).glob('*' + channel_pattern + '*.tif') if
-                is_file_old_enough(f, newest_mod_time, min_age_seconds)
-            ]
-            print(f"Initial Z-stacks found: {initial_files}")
-            loaded_z_files.update(initial_files)
-            data[channel_pattern] = load_z_stack(initial_files)  # Store combined data
-            if data[channel_pattern].shape[0] > max_timepoints:
-                data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
+    for folder_path in folder_paths:
+        for channel_pattern in channel_patterns:
+            newest_mod_time = get_newest_mod_time(folder_path, channel_pattern)
+            if newest_mod_time:
+                initial_files = [
+                    f for f in Path(folder_path).glob('*' + channel_pattern + '*.tif') if
+                    is_file_old_enough(f, newest_mod_time, min_age_seconds)
+                ]
+                print(f"Initial Z-stacks found: {initial_files}")
+                loaded_z_files.update(initial_files)
+                data[channel_pattern] = load_z_stack(initial_files)  # Store combined data
+                if data[channel_pattern].shape[0] > max_timepoints:
+                    data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
 
-            plane_parameters = {
-                'position': (32, 32, 32),
-                'normal': (1, 1, 1),
-                'enabled': True
-            }
+                plane_parameters = {
+                    'position': (32, 32, 32),
+                    'normal': (1, 1, 1),
+                    'enabled': True
+                }
 
-            layers[channel_pattern] = viewer.add_image(
-                data[channel_pattern],
-                name=channel_pattern,
-                colormap="gray",
-                scale=voxel_resolution
-            )
-            viewer.dims.axis_labels = axis_labels
+                layers[channel_pattern] = viewer.add_image(
+                    data[channel_pattern],
+                    name=channel_pattern,
+                    colormap="gray",
+                    scale=voxel_resolution
+                )
+                viewer.dims.axis_labels = axis_labels
 
-    worker = new_files(folder_path, channel_patterns, loaded_z_files, min_age_seconds, data, layers, max_timepoints)
+    worker = new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, data, layers, max_timepoints)
 
 
     # Define a widget using magicgui
