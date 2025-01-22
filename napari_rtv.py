@@ -713,6 +713,9 @@ if __name__ == "__main__":
                     colormap="gray",
                     scale=voxel_resolution
                 )
+                order = list(viewer.dims.order)
+                order[-3:] = order[-1], order[-2], order[-3]
+                viewer.dims.order = order
                 viewer.dims.axis_labels = axis_labels
 
     worker = new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, data, layers, max_timepoints)
@@ -748,6 +751,9 @@ if __name__ == "__main__":
             colormap="gray",
             scale=voxel_resolution
         )
+        order = list(viewer.dims.order)
+        order[-3:] = order[-1], order[-2], order[-3]
+        viewer.dims.order = order
         return layers[layer_update['channel_pattern']]
 
 
@@ -763,9 +769,7 @@ if __name__ == "__main__":
     viewer.scale_bar.visible = True
     viewer.scale_bar.unit = 'nm'
 
-    order = list(viewer.dims.order)
-    order[-3:] = order[-1], order[-2], order[-3]
-    viewer.dims.order = order
+
 
     worker.start()
     napari.run()
