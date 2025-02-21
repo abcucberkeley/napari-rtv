@@ -1,4 +1,6 @@
 import argparse
+import math
+
 import napari
 from PyQt5.QtWidgets import QSizePolicy
 from napari.qt.threading import thread_worker
@@ -526,7 +528,7 @@ def natural_sort_key(path):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', path.stem)]
 
 
-def load_z_stack(files):
+def load_z_stack(files, max_timepoints=math.inf):
     """Load Z-stacks grouped by timepoints into a 4D array."""
     timepoint_dict = {}
 
@@ -537,8 +539,11 @@ def load_z_stack(files):
             timepoint_dict.setdefault(timepoint, []).append(file)
 
     # Sort timepoints and load Z-stacks
-    time_stacks = []
-    for timepoint in sorted(timepoint_dict.keys()):
+    if max_timepoints < len(timepoint_dict):
+        sorted_keys = sorted(timepoint_dict.keys())[-max_timepoints:]
+    else:
+        sorted_keys = sorted(timepoint_dict.keys())
+    for timepoint in sorted_keys:
         z_files = sorted(timepoint_dict[timepoint], key=lambda f: int(re.search(r'_(\d+)msecAbs_', f.stem).group(1)))
         z_slices = []
         for z_file in z_files:
@@ -575,15 +580,15 @@ def new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, d
                     }
                     if new_z_files:
                         print(f"New Z-stacks found: {new_z_files}")
-                        loaded_z_files.update(new_z_files)
+                        loaded_z_files.update(new_z_files, max_timepoints)
 
                         # Load only the new files and update combined data
                         if channel_pattern in data:
-                            new_data = load_z_stack(new_z_files)
+                            new_data = load_z_stack(new_z_files, max_timepoints)
                             data[channel_pattern] = np.concatenate((data[channel_pattern], new_data),
                                                                    axis=0)  # Append new data to combined_data
                         else:
-                            data[channel_pattern] = load_z_stack(new_z_files)
+                            data[channel_pattern] = load_z_stack(new_z_files, max_timepoints)
                         if data[channel_pattern].shape[0] > max_timepoints:
                             data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
                         if channel_pattern in layers:
@@ -680,11 +685,8 @@ if __name__ == "__main__":
 
     # Track the newest file's modification time
     newest_mod_time = 0
-    # data = [None] * len(channel_patterns)
     data = {}
     layers = {}
-    # layers = [None] * len(channel_patterns)
-    # channel_patterns = ['*' + channel_pattern + '*.tif' for channel_pattern in channel_patterns]
 
     # Initial load with all existing files
     for folder_path in folder_paths:
@@ -697,7 +699,7 @@ if __name__ == "__main__":
                 ]
                 print(f"Initial Z-stacks found: {initial_files}")
                 loaded_z_files.update(initial_files)
-                data[channel_pattern] = load_z_stack(initial_files)  # Store combined data
+                data[channel_pattern] = load_z_stack(initial_files, max_timepoints)  # Store combined data
                 if data[channel_pattern].shape[0] > max_timepoints:
                     data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
 
@@ -714,7 +716,7 @@ if __name__ == "__main__":
                     scale=voxel_resolution
                 )
                 order = list(viewer.dims.order)
-                order[-3:] = order[-1], order[-2], order[-3]
+                order[-3:] = order[-1], order[-3], order[-2]
                 viewer.dims.order = order
                 viewer.dims.axis_labels = axis_labels
 
@@ -752,7 +754,7 @@ if __name__ == "__main__":
             scale=voxel_resolution
         )
         order = list(viewer.dims.order)
-        order[-3:] = order[-1], order[-2], order[-3]
+        order[-3:] = order[-1], order[-3], order[-2]
         viewer.dims.order = order
         return layers[layer_update['channel_pattern']]
 

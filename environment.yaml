@@ -3,8 +3,8 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - napari
-  - pyqt
+  - python=3.11
   - pip
   - pip:
+      - napari[all]
       - cpp-tiff
