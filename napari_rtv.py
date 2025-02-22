@@ -543,9 +543,9 @@ def load_z_stack(files, max_timepoints=math.inf):
         sorted_keys = sorted(timepoint_dict.keys())[-max_timepoints:]
     else:
         sorted_keys = sorted(timepoint_dict.keys())
+    z_slices = []
     for timepoint in sorted_keys:
         z_files = sorted(timepoint_dict[timepoint], key=lambda f: int(re.search(r'_(\d+)msecAbs_', f.stem).group(1)))
-        z_slices = []
         for z_file in z_files:
             z_slices.append(cpptiff.read_tiff(str(z_file)))
         # z_slices = [cpptiff.read_tiff(str(z_file)) for z_file in z_files]
@@ -716,7 +716,7 @@ if __name__ == "__main__":
                     scale=voxel_resolution
                 )
                 order = list(viewer.dims.order)
-                order[-3:] = order[-1], order[-3], order[-2]
+                order[-3:] = order[-1], order[-2], order[-3]
                 viewer.dims.order = order
                 viewer.dims.axis_labels = axis_labels
 
@@ -754,7 +754,7 @@ if __name__ == "__main__":
             scale=voxel_resolution
         )
         order = list(viewer.dims.order)
-        order[-3:] = order[-1], order[-3], order[-2]
+        order[-3:] = order[-1], order[-2], order[-3]
         viewer.dims.order = order
         return layers[layer_update['channel_pattern']]
 
