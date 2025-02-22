@@ -528,8 +528,10 @@ def natural_sort_key(path):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', path.stem)]
 
 
-def load_z_stack(files, max_timepoints=math.inf):
+def load_z_stack(files, range=None, step_size=1, max_timepoints=math.inf):
     """Load Z-stacks grouped by timepoints into a 4D array."""
+    if range is None:
+        range = [0]
     timepoint_dict = {}
 
     # Group files by timepoint
@@ -537,12 +539,16 @@ def load_z_stack(files, max_timepoints=math.inf):
         timepoint = extract_timepoint(file.name)
         if timepoint is not None:
             timepoint_dict.setdefault(timepoint, []).append(file)
-
-    # Sort timepoints and load Z-stacks
-    if max_timepoints < len(timepoint_dict):
-        sorted_keys = sorted(timepoint_dict.keys())[-max_timepoints:]
-    else:
-        sorted_keys = sorted(timepoint_dict.keys())
+    num_timepoints = len(timepoint_dict)
+    if len(range) == 1:
+        range.append(num_timepoints)
+    sorted_keys = sorted(timepoint_dict.keys())
+    if range[0] != 0 and range[1] != num_timepoints:
+        sorted_keys = [x for x in sorted_keys if range[0] <= x <= range[1]]
+    if step_size > 1:
+        sorted_keys = sorted_keys[::step_size]
+    if max_timepoints < len(sorted_keys):
+        sorted_keys = sorted_keys[-max_timepoints:]
     z_slices = []
     for timepoint in sorted_keys:
         z_files = sorted(timepoint_dict[timepoint], key=lambda f: int(re.search(r'_(\d+)msecAbs_', f.stem).group(1)))
@@ -584,11 +590,11 @@ def new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, d
 
                         # Load only the new files and update combined data
                         if channel_pattern in data:
-                            new_data = load_z_stack(new_z_files, max_timepoints)
+                            new_data = load_z_stack(new_z_files, max_timepoints=max_timepoints)
                             data[channel_pattern] = np.concatenate((data[channel_pattern], new_data),
                                                                    axis=0)  # Append new data to combined_data
                         else:
-                            data[channel_pattern] = load_z_stack(new_z_files, max_timepoints)
+                            data[channel_pattern] = load_z_stack(new_z_files, max_timepoints=max_timepoints)
                         if data[channel_pattern].shape[0] > max_timepoints:
                             data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
                         if channel_pattern in layers:
@@ -653,7 +659,11 @@ if __name__ == "__main__":
                     help="Channel patterns separated by comma")
     ap.add_argument('--voxel-resolution', type=lambda s: tuple(map(int, s.split(','))), required=True,
                     help="Voxel resolution as z,y,x in nm.")
-    ap.add_argument('--max-timepoints', type=int, default=500,
+    ap.add_argument('--timepoint-range', type=lambda s: list(map(int, s.split(','))), default=[0],
+                    help="Comma separated timepoint range for start and end. End timepoint is optional. Ex. 0,10 or 0")
+    ap.add_argument('--timepoint-step-size', type=int, default=1,
+                    help="Timpoint step size.")
+    ap.add_argument('--max-timepoints', type=int, default=math.inf,
                     help="The max amount of timepoints that will be displayed at a time.")
     args = ap.parse_args()
 
@@ -663,6 +673,8 @@ if __name__ == "__main__":
     if len(args.voxel_resolution) != 3:
         ap.error("Voxel resolution must have exactly three values (y,x,z).")
     voxel_resolution = (1,) + args.voxel_resolution
+    timepoint_range = args.timepoint_range
+    timepoint_step_size = args.timepoint_step_size
     max_timepoints = args.max_timepoints
     axis_labels = ('t', 'z', 'y', 'x')
 
@@ -687,6 +699,24 @@ if __name__ == "__main__":
     newest_mod_time = 0
     data = {}
     layers = {}
+    channel_patterns_copy = channel_patterns
+    channel_patterns = set()
+    # Define the pattern for chunked files
+    pattern = re.compile(r'\d+x_\d+y_\d+z')
+    for folder_path in folder_paths:
+        for channel_pattern in channel_patterns_copy:
+            all_files = [
+                f for f in Path(folder_path).glob('*' + channel_pattern + '*.tif')
+                if is_file_old_enough(f, newest_mod_time, min_age_seconds)
+            ]
+            # Extract matching patterns and add to the set
+            for f in all_files:
+                if match := pattern.search(f.name):
+                    channel_patterns.add(f'{channel_pattern}*{match.group(0)}')
+    if channel_patterns:
+        channel_patterns = sorted(channel_patterns)
+    else:
+        channel_patterns = channel_patterns_copy
 
     # Initial load with all existing files
     for folder_path in folder_paths:
@@ -699,7 +729,7 @@ if __name__ == "__main__":
                 ]
                 print(f"Initial Z-stacks found: {initial_files}")
                 loaded_z_files.update(initial_files)
-                data[channel_pattern] = load_z_stack(initial_files, max_timepoints)  # Store combined data
+                data[channel_pattern] = load_z_stack(initial_files, timepoint_range, timepoint_step_size, max_timepoints)  # Store combined data
                 if data[channel_pattern].shape[0] > max_timepoints:
                     data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
 
