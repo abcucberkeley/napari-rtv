@@ -3,6 +3,7 @@ from tkinter import messagebox, filedialog
 import math
 import subprocess
 
+
 # Function to handle the form submission
 def submit_form():
     try:
@@ -35,10 +36,9 @@ def submit_form():
 
         # Execute the command in a new process
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        #messagebox.showinfo("Success", "Command executed successfully!")
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {str(e)}")
+
 
 # Function to browse for a single folder
 def browse_folder():
@@ -46,6 +46,7 @@ def browse_folder():
     if folder:
         folder_paths_entry.delete(0, tk.END)  # Clear the entry field
         folder_paths_entry.insert(0, folder)  # Set the new folder path
+
 
 # Creating the main window
 root = tk.Tk()
@@ -68,6 +69,7 @@ default_values = {
     'max_timepoints': 'inf'
 }
 
+
 # Function to add input fields
 def add_input_field(label_text, default_value, row, has_browse=False):
     label = tk.Label(root, text=label_text)
@@ -82,6 +84,7 @@ def add_input_field(label_text, default_value, row, has_browse=False):
         button.grid(row=row, column=2, padx=5, pady=5)
 
     return entry
+
 
 # Create the form fields with default values
 folder_paths_entry = add_input_field("Folder Paths (comma-separated)", default_values['folder_paths'], 0, True)

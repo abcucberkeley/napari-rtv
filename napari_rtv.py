@@ -1,8 +1,12 @@
 import argparse
+import json
 import math
+import os
 
 import napari
-from PyQt5.QtWidgets import QSizePolicy
+from PyQt5.QtCore import QSize, QTimer
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QSizePolicy, QLabel
 from napari.qt.threading import thread_worker
 import numpy as np
 import cpptiff
@@ -539,6 +543,7 @@ def load_z_stack(files, range=None, step_size=1, max_timepoints=math.inf):
         timepoint = extract_timepoint(file.name)
         if timepoint is not None:
             timepoint_dict.setdefault(timepoint, []).append(file)
+
     num_timepoints = len(timepoint_dict)
     if len(range) == 1:
         range.append(num_timepoints)
@@ -549,15 +554,14 @@ def load_z_stack(files, range=None, step_size=1, max_timepoints=math.inf):
         sorted_keys = sorted_keys[::step_size]
     if max_timepoints < len(sorted_keys):
         sorted_keys = sorted_keys[-max_timepoints:]
+
     z_slices = []
     for timepoint in sorted_keys:
         z_files = sorted(timepoint_dict[timepoint], key=lambda f: int(re.search(r'_(\d+)msecAbs_', f.stem).group(1)))
         for z_file in z_files:
             z_slices.append(cpptiff.read_tiff(str(z_file)))
-        # z_slices = [cpptiff.read_tiff(str(z_file)) for z_file in z_files]
-        # time_stacks.extend(np.concatenate(z_slices, axis=0))  # Stack slices along Z-axis
-        # time_stacks.append(np.concatenate(z_slices, axis=0))
-    return np.stack(z_slices, axis=0)  # Stack timepoints along the T-axis
+
+    return np.stack(z_slices, axis=0)
 
 
 def get_newest_mod_time(folder_path, channel_pattern):
@@ -603,11 +607,65 @@ def new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, d
                             layer_update = {'channel_pattern': channel_pattern, 'data': data[channel_pattern]}
                             layer = yield layer_update
                             layers[channel_pattern] = layer
+        time.sleep(1)
 
-                        # yield i, data[i]
 
-        time.sleep(1)  # Adjust interval as needed
+class PNGViewerWidget(QWidget):
+    def __init__(self, viewer, layer_to_image_map):
+        """Widget to show a PNG for the selected layer."""
+        super().__init__()
 
+        self.viewer = viewer
+        self.layer_to_image_map = layer_to_image_map  # Dict {layer_name: image_path}
+
+        self.label = QLabel(self)
+        self.label.setAlignment(Qt.AlignCenter)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.label)
+        self.setLayout(layout)
+
+        self.current_pixmap = None  # Store the original pixmap
+
+        # Connect to Napari layer selection changes
+        self.viewer.layers.selection.events.active.connect(self.update_image)
+
+        # Initially update image when widget is created
+        self.update_image()
+
+    def update_image(self, event=None):
+        """Update the PNG display when the active layer changes."""
+        active_layer = self.viewer.layers.selection.active
+        if active_layer and active_layer.name in self.layer_to_image_map:
+            image_path = self.layer_to_image_map[active_layer.name]
+            self.current_pixmap = QPixmap(image_path)
+            self.resize_image(self.size())  # Resize immediately
+        else:
+            self.label.clear()
+            self.current_pixmap = None
+
+    def resize_image(self, new_size):
+        """Resize the image to 10% of the widget size."""
+        if not self.current_pixmap:
+            return  # No image loaded
+
+        # Set the image size to 10% of the widget's size
+        scale_factor = 0.8  # 10% of widget size
+
+        # Calculate new size based on widget size
+        scaled_size = QSize(int(new_size.width() * scale_factor), int(new_size.height() * scale_factor))
+
+        # Scale image while keeping aspect ratio
+        scaled_pixmap = self.current_pixmap.scaled(
+            scaled_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+        self.label.setPixmap(scaled_pixmap)
+
+    def resizeEvent(self, event):
+        """Handle widget resize events to update the image size."""
+        new_size = event.size()  # Get the new size of the widget
+        self.resize_image(new_size)
+        super().resizeEvent(event)  # Call base method to avoid recursion
 
 # Function to crop data based on bounding box
 def crop_3d_with_bounding_box(image_layer, layer, mip_size):
@@ -663,11 +721,10 @@ if __name__ == "__main__":
                     help="Comma separated timepoint range for start and end. End timepoint is optional. Ex. 0,10 or 0")
     ap.add_argument('--timepoint-step-size', type=int, default=1,
                     help="Timpoint step size.")
-    ap.add_argument('--max-timepoints', type=int, default=math.inf,
+    ap.add_argument('--max-timepoints', type=float, default=math.inf,
                     help="The max amount of timepoints that will be displayed at a time.")
     args = ap.parse_args()
 
-    #folder_path = Path(args.folder_path)
     folder_paths = args.folder_paths
     channel_patterns = args.channel_patterns
     if len(args.voxel_resolution) != 3:
@@ -717,6 +774,14 @@ if __name__ == "__main__":
         channel_patterns = sorted(channel_patterns)
     else:
         channel_patterns = channel_patterns_copy
+    '''
+    layer_to_image_map = {}
+    for channel_pattern in channel_patterns:
+        layer_to_image_map[channel_pattern] = '/clusterfs/nvme2/Data/20240911_Korra_Foundation/20250218_mem_histone/fish1_24hpf_halo_jfx649/roi1/DSH1/DSH_PNG/DSH1_DSH_dx_000y_000z_000t_0000_elapsed_47.758s.png'
+    widget = PNGViewerWidget(viewer, layer_to_image_map)
+    viewer.window.add_dock_widget(widget, name="Layer PNG Viewer", area="left")
+    '''
+    pbr = napari.utils.progress(total=len(channel_patterns))
 
     # Initial load with all existing files
     for folder_path in folder_paths:
@@ -732,6 +797,7 @@ if __name__ == "__main__":
                 data[channel_pattern] = load_z_stack(initial_files, timepoint_range, timepoint_step_size, max_timepoints)  # Store combined data
                 if data[channel_pattern].shape[0] > max_timepoints:
                     data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
+                pbr.update(1)
 
                 plane_parameters = {
                     'position': (32, 32, 32),
@@ -746,12 +812,55 @@ if __name__ == "__main__":
                     scale=voxel_resolution
                 )
                 order = list(viewer.dims.order)
-                order[-3:] = order[-1], order[-2], order[-3]
-                viewer.dims.order = order
+                if order == [0, 1, 2, 3]:
+                    order[-3:] = order[-1], order[-2], order[-3]
+                    viewer.dims.order = order
                 viewer.dims.axis_labels = axis_labels
-
+    pbr.close()
     worker = new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, data, layers, max_timepoints)
 
+    # Path to save the JSON file
+    data_quality_audit = Path(os.path.join(folder_paths[0],'data_quality_audit.json'))
+
+    def save_to_json(status: str, notes: str):
+        """Save the current radio button and notes to a JSON file."""
+        data = {"quality_metric": status, "auditor_notes": notes}
+        with data_quality_audit.open("w") as f:
+            json.dump(data, f, indent=4)
+
+    quality_metric = 'keep'
+    auditor_notes = ''
+    if os.path.exists(data_quality_audit):
+        with data_quality_audit.open() as f:
+            data_quality_audit_dict = json.load(f)
+            quality_metric = data_quality_audit_dict['quality_metric']
+            auditor_notes = data_quality_audit_dict['auditor_notes']
+    @magicgui(
+        status={"label": "Quality Metric", "widget_type": "RadioButtons", "choices": ["keep", "maybe", "kill"], "value": quality_metric},
+        notes={"label": "Auditor Notes", "widget_type": "LineEdit", "value": auditor_notes},
+        call_button="Save"  # Renames the Run button to Save
+    )
+    def audit_widget(status: str, notes: str):
+        """Napari widget with radio buttons and a text box."""
+        save_to_json(status, notes)
+
+
+    # Update function to handle signals correctly
+    def update_status(value):
+        """Callback for status changes."""
+        save_to_json(audit_widget.status.value, audit_widget.notes.value)
+
+
+    def update_notes(value):
+        """Callback for notes changes."""
+        save_to_json(audit_widget.status.value, audit_widget.notes.value)
+
+
+    # Connect signals correctly
+    audit_widget.status.changed.connect(update_status)
+    audit_widget.notes.changed.connect(update_notes)
+
+    viewer.window.add_dock_widget(audit_widget, name="Audit", area="left")
 
     # Define a widget using magicgui
     @magicgui(
@@ -784,8 +893,9 @@ if __name__ == "__main__":
             scale=voxel_resolution
         )
         order = list(viewer.dims.order)
-        order[-3:] = order[-1], order[-2], order[-3]
-        viewer.dims.order = order
+        if order == [0, 1, 2, 3]:
+            order[-3:] = order[-1], order[-2], order[-3]
+            viewer.dims.order = order
         return layers[layer_update['channel_pattern']]
 
 
