@@ -548,7 +548,7 @@ def load_z_stack(files, range=None, step_size=1, max_timepoints=math.inf):
     if len(range) == 1:
         range.append(num_timepoints)
     sorted_keys = sorted(timepoint_dict.keys())
-    if range[0] != 0 and range[1] != num_timepoints:
+    if range[0] != 0 or range[1] != num_timepoints:
         sorted_keys = [x for x in sorted_keys if range[0] <= x <= range[1]]
     if step_size > 1:
         sorted_keys = sorted_keys[::step_size]
