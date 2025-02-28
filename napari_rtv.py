@@ -549,7 +549,7 @@ def load_z_stack(files, range=None, step_size=1, max_timepoints=math.inf):
         range.append(num_timepoints)
     sorted_keys = sorted(timepoint_dict.keys())
     if range[0] != 0 or range[1] != num_timepoints:
-        sorted_keys = [x for x in sorted_keys if range[0] <= x <= range[1]]
+        sorted_keys = sorted_keys[range[0]:range[1]]
     if step_size > 1:
         sorted_keys = sorted_keys[::step_size]
     if max_timepoints < len(sorted_keys):
@@ -837,28 +837,27 @@ if __name__ == "__main__":
             auditor_notes = data_quality_audit_dict['auditor_notes']
     @magicgui(
         status={"label": "Quality Metric", "widget_type": "RadioButtons", "choices": ["keep", "maybe", "kill"], "value": quality_metric},
-        notes={"label": "Auditor Notes", "widget_type": "LineEdit", "value": auditor_notes},
-        call_button="Save"  # Renames the Run button to Save
+        notes={"label": "Auditor Notes", "widget_type": "TextEdit", "value": auditor_notes},
+        call_button="Save"
     )
     def audit_widget(status: str, notes: str):
         """Napari widget with radio buttons and a text box."""
         save_to_json(status, notes)
 
 
-    # Update function to handle signals correctly
     def update_status(value):
         """Callback for status changes."""
         save_to_json(audit_widget.status.value, audit_widget.notes.value)
 
 
-    def update_notes(value):
+    def update_notes():
         """Callback for notes changes."""
         save_to_json(audit_widget.status.value, audit_widget.notes.value)
 
 
-    # Connect signals correctly
+    # Connect signals
     audit_widget.status.changed.connect(update_status)
-    audit_widget.notes.changed.connect(update_notes)
+    audit_widget.notes.native.textChanged.connect(update_notes)
 
     viewer.window.add_dock_widget(audit_widget, name="Audit", area="left")
 
