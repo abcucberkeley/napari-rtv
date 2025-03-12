@@ -9,9 +9,17 @@ cd napari-rtv
 conda env create -f environment.yaml
 conda activate napari-rtv
 ````
+
 ### Usage
 
-You can call the napari_rtv.py script from the napari-rtv folder
+You can call the napari_gui.py script from the napari-rtv folder
+
+#### Run the GUI
+````
+python napari_gui.py
+````
+
+You can call the napari_rtv.py script from the napari-rtv folder if you prefer to use the cli version directly
 
 #### Monitor a single folder and channel pattern
 ````
