@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import math
 import os
@@ -564,9 +565,11 @@ def load_z_stack(files, range=None, step_size=1, max_timepoints=math.inf):
     return np.stack(z_slices, axis=0)
 
 
-def get_newest_mod_time(folder_path, channel_pattern):
+def get_newest_mod_time(folder_path, channel_pattern, paths=None):
     """Get the latest modification time among all TIFF files in the folder."""
-    return max((f.stat().st_mtime for f in Path(folder_path).glob('*' + channel_pattern + '*.tif')), default=0)
+    if not paths:
+        paths = Path(folder_path).glob('*' + channel_pattern + '*.tif')
+    return max((f.stat().st_mtime for f in paths), default=0)
 
 
 def is_file_old_enough(file_path, newest_mod_time, min_age_seconds=60):
@@ -580,12 +583,14 @@ def new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, d
     # Monitor folder for new files
     while napari.current_viewer() is not None:
         for folder_path in folder_paths:
+            path = Path(folder_path)
             for channel_pattern in channel_patterns:
-                newest_mod_time = get_newest_mod_time(folder_path, channel_pattern)
+                paths = path.glob('*' + channel_pattern + '*.tif')
+                newest_mod_time = get_newest_mod_time(folder_path, channel_pattern, paths)
 
                 if newest_mod_time:
                     new_z_files = {
-                        f for f in Path(folder_path).glob('*' + channel_pattern + '*.tif')
+                        f for f in paths
                         if f not in loaded_z_files and is_file_old_enough(f, newest_mod_time, min_age_seconds)
                     }
                     if new_z_files:
@@ -669,12 +674,6 @@ class PNGViewerWidget(QWidget):
 
 # Function to crop data based on bounding box
 def crop_3d_with_bounding_box(image_layer, layer, mip_size):
-    '''
-    current_z = viewer.dims.current_step[1]
-    mip_half_size = int(mip_size // 2)
-    z_min = max(0, current_z - mip_half_size)
-    z_max = min(image_layer.data.shape[1], current_z + mip_half_size + 1)
-    '''
     current_z = viewer.dims.current_step[1]
     mip_half_size = int(mip_size // 2)
     total_slices = image_layer.data.shape[1]
@@ -756,7 +755,7 @@ if __name__ == "__main__":
     newest_mod_time = 0
     data = {}
     layers = {}
-    channel_patterns_copy = channel_patterns
+    channel_patterns_copy = copy.deepcopy(channel_patterns)
     channel_patterns = set()
     # Define the pattern for chunked files
     pattern = re.compile(r'\d+x_\d+y_\d+z')
