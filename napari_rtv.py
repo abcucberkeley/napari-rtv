@@ -834,6 +834,11 @@ if __name__ == "__main__":
             data_quality_audit_dict = json.load(f)
             quality_metric = data_quality_audit_dict['quality_metric']
             auditor_notes = data_quality_audit_dict['auditor_notes']
+    else:
+        data = {"quality_metric": 'keep', "auditor_notes": ''}
+        with data_quality_audit.open("w") as f:
+            json.dump(data, f, indent=4)
+        os.chmod(data_quality_audit, 0o777)
     @magicgui(
         status={"label": "Quality Metric", "widget_type": "RadioButtons", "choices": ["keep", "maybe", "kill"], "value": quality_metric},
         notes={"label": "Auditor Notes", "widget_type": "TextEdit", "value": auditor_notes},
