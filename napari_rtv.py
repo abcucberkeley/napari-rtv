@@ -829,7 +829,7 @@ if __name__ == "__main__":
         layer_name = current_layer.name
         if layer_name not in channel_patterns:
             return
-        curr_data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{layer_name}.json'))
+        curr_data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{layer_name.replace("*","_")}.json'))
         with curr_data_quality_audit.open() as f:
             data_quality_audit_new_dict = json.load(f)
             audit_widget.status.value = data_quality_audit_new_dict.get("quality_metric", "keep")
@@ -838,7 +838,7 @@ if __name__ == "__main__":
     viewer.layers.selection.events.changed.connect(on_layer_change)
 
     # Path to save the JSON file
-    data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{channel_patterns[-1]}.json'))
+    data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{channel_patterns[-1].replace("*","_")}.json'))
 
     def save_to_json(status: str, until: int, notes: str):
         """Save the current radio button and notes to a JSON file."""
@@ -851,7 +851,7 @@ if __name__ == "__main__":
         layer_name = current_layer.name
         if layer_name not in channel_patterns:
             return
-        curr_data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{layer_name}.json'))
+        curr_data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{layer_name.replace("*","_")}.json'))
         with curr_data_quality_audit.open("w") as f:
             json.dump(data, f, indent=4)
         os.chmod(curr_data_quality_audit, 0o775)
@@ -868,7 +868,7 @@ if __name__ == "__main__":
             keep_until = data_quality_audit_dict['keep_until']
             auditor_notes = data_quality_audit_dict['auditor_notes']
     for channel_pattern in channel_patterns:
-        curr_json_file = Path(os.path.join(folder_paths[0], f'data_quality_audit_{channel_pattern}.json'))
+        curr_json_file = Path(os.path.join(folder_paths[0], f'data_quality_audit_{channel_pattern.replace("*","_")}.json'))
         if not os.path.exists(curr_json_file):
             data = {"quality_metric": quality_metric, "keep_until": keep_until, "auditor_notes": auditor_notes}
             with curr_json_file.open("w") as f:
