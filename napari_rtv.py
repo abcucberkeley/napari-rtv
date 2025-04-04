@@ -284,6 +284,7 @@ class MultipleViewerWidget(QSplitter):
         self.qt_viewer2 = QtViewerWrap(viewer, self.viewer_model2)
 
         ''''''
+
         # Function to sync the zoom level across all viewers to the one that is being zoomed
         def sync_zoom_to_active(viewers, active_viewer):
             zoom_level = active_viewer.camera.zoom
@@ -308,7 +309,6 @@ class MultipleViewerWidget(QSplitter):
 
         # Connect zoom events for all viewers
         connect_zoom_events(viewers)
-
 
         # self.tab_widget = QTabWidget()
         # w1 = ExampleWidget()
@@ -398,11 +398,11 @@ class MultipleViewerWidget(QSplitter):
 
         order[-3:] = order[-2], order[-1], order[-3]
         self.viewer_model1.dims.order = order
-        #order[-3:] = order[-2], order[-3], order[-1]
-        #self.viewer_model1.dims.order = order
-        #order = list(self.viewer.dims.order)
-        #order[-3:] = order[-1], order[-2], order[-3]
-        #self.viewer_model2.dims.order = order
+        # order[-3:] = order[-2], order[-3], order[-1]
+        # self.viewer_model1.dims.order = order
+        # order = list(self.viewer.dims.order)
+        # order[-3:] = order[-1], order[-2], order[-3]
+        # self.viewer_model2.dims.order = order
 
     def _layer_added(self, event):
         """add layer to additional viewers and connect all required events"""
@@ -672,6 +672,7 @@ class PNGViewerWidget(QWidget):
         self.resize_image(new_size)
         super().resizeEvent(event)  # Call base method to avoid recursion
 
+
 # Function to crop data based on bounding box
 def crop_3d_with_bounding_box(image_layer, layer, mip_size):
     current_z = viewer.dims.current_step[1]
@@ -736,17 +737,17 @@ if __name__ == "__main__":
 
     viewer = napari.Viewer()
     viewer.window._qt_window.showMaximized()
-    #viewer.window._qt_window.showFullScreen()
+    # viewer.window._qt_window.showFullScreen()
 
-    #dock_widget1 = SingleViewerWidget(viewer)
-    #dock_widget2 = SingleViewerWidget(viewer)
+    # dock_widget1 = SingleViewerWidget(viewer)
+    # dock_widget2 = SingleViewerWidget(viewer)
     dock_widget = MultipleViewerWidget(viewer)
     cross = CrossWidget(viewer)
 
     viewer.window.add_dock_widget(dock_widget, name='yz and xz planes', area='right')
     viewer.window.add_dock_widget(cross, name='Cross', area='left')
     window_geometry = viewer.window.geometry()
-    #viewer.window._qt_window.resize(200,200)
+    # viewer.window._qt_window.resize(200,200)
 
     loaded_z_files = set()  # Track loaded files
     min_age_seconds = 60  # Minimum age in seconds before a file is considered complete
@@ -793,7 +794,8 @@ if __name__ == "__main__":
                 ]
                 print(f"Initial Z-stacks found: {initial_files}")
                 loaded_z_files.update(initial_files)
-                data[channel_pattern] = load_z_stack(initial_files, timepoint_range, timepoint_step_size, max_timepoints)  # Store combined data
+                data[channel_pattern] = load_z_stack(initial_files, timepoint_range, timepoint_step_size,
+                                                     max_timepoints)  # Store combined data
                 if data[channel_pattern].shape[0] > max_timepoints:
                     data[channel_pattern] = data[channel_pattern][-max_timepoints:, :, :, :]
                 pbr.update(1)
@@ -818,52 +820,96 @@ if __name__ == "__main__":
     pbr.close()
     worker = new_files(folder_paths, channel_patterns, loaded_z_files, min_age_seconds, data, layers, max_timepoints)
 
-    # Path to save the JSON file
-    data_quality_audit = Path(os.path.join(folder_paths[0],'data_quality_audit.json'))
+    def on_layer_change(event):
+        selected = list(viewer.layers.selection)
+        if not selected:
+            return
 
-    def save_to_json(status: str, notes: str):
+        current_layer = selected[0]
+        layer_name = current_layer.name
+        if layer_name not in channel_patterns:
+            return
+        curr_data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{layer_name}.json'))
+        with curr_data_quality_audit.open() as f:
+            data_quality_audit_new_dict = json.load(f)
+            audit_widget.status.value = data_quality_audit_new_dict.get("quality_metric", "keep")
+            audit_widget.until.value = data_quality_audit_new_dict.get("keep_until", 0)
+            audit_widget.notes.value = data_quality_audit_new_dict.get("auditor_notes", "")
+    viewer.layers.selection.events.changed.connect(on_layer_change)
+
+    # Path to save the JSON file
+    data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{channel_patterns[-1]}.json'))
+
+    def save_to_json(status: str, until: int, notes: str):
         """Save the current radio button and notes to a JSON file."""
-        data = {"quality_metric": status, "auditor_notes": notes}
-        with data_quality_audit.open("w") as f:
+        data = {"quality_metric": status, 'keep_until': until, "auditor_notes": notes}
+        selected = list(viewer.layers.selection)
+        if not selected:
+            return
+
+        current_layer = selected[0]
+        layer_name = current_layer.name
+        if layer_name not in channel_patterns:
+            return
+        curr_data_quality_audit = Path(os.path.join(folder_paths[0], f'data_quality_audit_{layer_name}.json'))
+        with curr_data_quality_audit.open("w") as f:
             json.dump(data, f, indent=4)
+        os.chmod(curr_data_quality_audit, 0o775)
 
     quality_metric = 'keep'
+    keep_until_max = int((len(all_files) / len(channel_patterns)) * len(channel_patterns_copy))
+    keep_until = keep_until_max
     auditor_notes = ''
+
     if os.path.exists(data_quality_audit):
         with data_quality_audit.open() as f:
             data_quality_audit_dict = json.load(f)
             quality_metric = data_quality_audit_dict['quality_metric']
+            keep_until = data_quality_audit_dict['keep_until']
             auditor_notes = data_quality_audit_dict['auditor_notes']
-    else:
-        data = {"quality_metric": 'keep', "auditor_notes": ''}
-        with data_quality_audit.open("w") as f:
-            json.dump(data, f, indent=4)
-        os.chmod(data_quality_audit, 0o777)
+    for channel_pattern in channel_patterns:
+        curr_json_file = Path(os.path.join(folder_paths[0], f'data_quality_audit_{channel_pattern}.json'))
+        if not os.path.exists(curr_json_file):
+            data = {"quality_metric": quality_metric, "keep_until": keep_until, "auditor_notes": auditor_notes}
+            with curr_json_file.open("w") as f:
+                json.dump(data, f, indent=4)
+            os.chmod(curr_json_file, 0o775)
+
     @magicgui(
-        status={"label": "Quality Metric", "widget_type": "RadioButtons", "choices": ["keep", "maybe", "kill"], "value": quality_metric},
+        status={"label": "Quality Metric", "widget_type": "RadioButtons", "choices": ["keep", "maybe", "kill"],
+                "value": quality_metric},
+        until={"label": "Keep Until", "widget_type": "SpinBox", "min": 0, "max": keep_until_max, "value": keep_until,
+               "step": 1},
         notes={"label": "Auditor Notes", "widget_type": "TextEdit", "value": auditor_notes},
         call_button="Save"
     )
-    def audit_widget(status: str, notes: str):
+    def audit_widget(status: str, until: int, notes: str):
         """Napari widget with radio buttons and a text box."""
-        save_to_json(status, notes)
+        save_to_json(status, until, notes)
 
 
     def update_status(value):
         """Callback for status changes."""
-        save_to_json(audit_widget.status.value, audit_widget.notes.value)
+        save_to_json(audit_widget.status.value, audit_widget.until.value, audit_widget.notes.value)
+
+
+    def update_until(value):
+        """Callback for keep_until changes."""
+        save_to_json(audit_widget.status.value, audit_widget.until.value, audit_widget.notes.value)
 
 
     def update_notes():
         """Callback for notes changes."""
-        save_to_json(audit_widget.status.value, audit_widget.notes.value)
+        save_to_json(audit_widget.status.value, audit_widget.until.value, audit_widget.notes.value)
 
 
     # Connect signals
     audit_widget.status.changed.connect(update_status)
+    audit_widget.until.changed.connect(update_until)
     audit_widget.notes.native.textChanged.connect(update_notes)
 
     viewer.window.add_dock_widget(audit_widget, name="Audit", area="left")
+
 
     # Define a widget using magicgui
     @magicgui(
@@ -913,8 +959,6 @@ if __name__ == "__main__":
     # Add the scale bar
     viewer.scale_bar.visible = True
     viewer.scale_bar.unit = 'nm'
-
-
 
     worker.start()
     napari.run()
