@@ -145,6 +145,7 @@ class visualizeTrainingDataTab(QWidget):
         self.default_values = {
             'zarr_path': '',
             'timepoint_range': '0',
+            'channel_range': '0'
         }
 
         # Add the Main Label
@@ -162,6 +163,8 @@ class visualizeTrainingDataTab(QWidget):
         self.zarr_path_entry = self.add_input_field(layout, "Zarr Path", self.default_values['zarr_path'], True)
         layout.addStretch(1)
         self.timepoint_range_entry = self.add_input_field(layout, "Timepoint Range (start or start,end)", self.default_values['timepoint_range'])
+        layout.addStretch(1)
+        self.channel_range_entry = self.add_input_field(layout, "Channel Range (start or start,end)", self.default_values['channel_range'])
         layout.addStretch(1)
         stitch_hboxlayout = QHBoxLayout()
         label = QLabel('Stitch')
@@ -224,9 +227,11 @@ class visualizeTrainingDataTab(QWidget):
             # Get values from the entries
             zarr_path = self.zarr_path_entry.text()
             timepoint_range = self.timepoint_range_entry.text()
+            channel_range = self.channel_range_entry.text()
 
             # Validate and process inputs
             timepoint_range = list(map(int, timepoint_range.split(','))) if timepoint_range else [0]
+            channel_range = list(map(int, channel_range.split(','))) if channel_range else [0]
 
             # Format as command-line arguments
             script_name = 'read_zarr3.py'
@@ -236,6 +241,7 @@ class visualizeTrainingDataTab(QWidget):
                 "python", script_name,
                 "--zarr-path", zarr_path,
                 "--timepoint-range", ','.join(map(str, timepoint_range)),
+                "--channel-range", ','.join(map(str, channel_range))
             ]
 
             # Execute the command in a new process
