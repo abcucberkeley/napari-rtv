@@ -128,7 +128,7 @@ class dataAuditorTab(QWidget):
             ]
 
             # Execute the command in a new process
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(cmd)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
@@ -245,7 +245,7 @@ class visualizeTrainingDataTab(QWidget):
             ]
 
             # Execute the command in a new process
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(cmd)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
