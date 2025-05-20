@@ -38,46 +38,22 @@ if __name__ == "__main__":
     ).result()
 
     if len(timepoint_range) == 1:
-        timepoint_range.append(dataset.domain.shape[1])
+        timepoint_range.append(dataset.domain.shape[0])
 
     if len(channel_range) == 1:
-        channel_range.append(dataset.domain.shape[5])
+        channel_range.append(dataset.domain.shape[4])
 
-    z_min = float('inf')
-    y_min = float('inf')
-    x_min = float('inf')
-    z_max = 0
-    y_max = 0
-    x_max = 0
-    for chunk_name, chunk in chunks['chunk_names'].items():
-        z_min = min(z_min, chunk['bbox'][0])
-        y_min = min(y_min, chunk['bbox'][1])
-        x_min = min(x_min, chunk['bbox'][2])
-        z_max = max(z_max, chunk['bbox'][3])
-        y_max = max(y_max, chunk['bbox'][4])
-        x_max = max(x_max, chunk['bbox'][5])
+    z_min = chunks['bbox'][0]
+    y_min = chunks['bbox'][1]
+    x_min = chunks['bbox'][2]
+    z_max = chunks['bbox'][3]
+    y_max = chunks['bbox'][4]
+    x_max = chunks['bbox'][5]
     viewer = napari.Viewer()
     for i in range(channel_range[0], channel_range[1]):
-        stitched_image = np.zeros((timepoint_range[1] - timepoint_range[0], z_max - z_min, y_max - y_min, x_max - x_min),
-                                  dtype=np.uint16)
-
-        image_data = dataset[:, timepoint_range[0]:timepoint_range[1], ..., i].read().result()
-
-        delimiters = r"[./]"
-        for chunk_name, chunk in chunks['chunk_names'].items():
-            curr_chunk_list = re.split(delimiters, chunk_name)
-            curr_chunk_list.remove('c')
-            if int(curr_chunk_list[1]) != 0:
-                continue
-
-            # Get the chunk's position within stitched_image
-            z_start, y_start, x_start = chunk['bbox'][0] - z_min, chunk['bbox'][1] - y_min, chunk['bbox'][2] - x_min
-            z_end, y_end, x_end = chunk['bbox'][3] - z_min, chunk['bbox'][4] - y_min, chunk['bbox'][5] - x_min
+        stitched_image = dataset[timepoint_range[0]:timepoint_range[1], ..., i].read().result()
 
 
-            # Copy chunk data
-            stitched_image[:, z_start:z_end, y_start:y_end, x_start:x_end] = \
-                image_data[int(curr_chunk_list[0]), ...]
         channel_name = metadata['channelPatterns'][i]
         viewer.add_image(stitched_image, name=channel_name,
                          scale=(1, pixel_sizes[0], pixel_sizes[1], pixel_sizes[2]))
