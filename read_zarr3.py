@@ -64,5 +64,7 @@ if __name__ == "__main__":
         viewer.add_image(image_data, name=channel_name, scale=(1, 1, pixel_sizes[0], pixel_sizes[1], pixel_sizes[2]))
     axis_labels = ('chunk', 't', 'z', 'y', 'x')
     viewer.dims.axis_labels = axis_labels
+    viewer.scale_bar.visible = True
+    viewer.scale_bar.unit = 'um'
 
     napari.run()

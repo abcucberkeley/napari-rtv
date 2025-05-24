@@ -101,5 +101,7 @@ if __name__ == "__main__":
                       text={"string": chunk_labels, "size": 12, "color": "white"})
     axis_labels = ('t', 'z', 'y', 'x')
     viewer.dims.axis_labels = axis_labels
+    viewer.scale_bar.visible = True
+    viewer.scale_bar.unit = 'um'
 
     napari.run()
