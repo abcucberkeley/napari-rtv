@@ -44,10 +44,16 @@ if __name__ == "__main__":
 
     cube_size = metadata['cube_size']
     bbox = metadata['training_images'][base_name]['bbox']
-    num_z_chunks = int(((bbox[3] - bbox[0]) / cube_size))
-    num_y_chunks = int(((bbox[4] - bbox[1]) / cube_size))
-    num_x_chunks = int(((bbox[5] - bbox[2]) / cube_size))
+    num_z_chunks = int(((dataset.shape[1]) / cube_size))
+    num_y_chunks = int(((dataset.shape[2]) / cube_size))
+    num_x_chunks = int(((dataset.shape[3]) / cube_size))
     num_chunks = num_z_chunks*num_y_chunks*num_x_chunks
+
+    if metadata.get('augmentation_info'):
+        num_z_chunks = metadata['augmentation_info']['num_z_chunks']
+        num_y_chunks = metadata['augmentation_info']['num_y_chunks']
+        num_x_chunks = metadata['augmentation_info']['num_x_chunks']
+        num_chunks = metadata['augmentation_info']['num_chunks']
 
     viewer = napari.Viewer()
     for i in range(channel_range[0], channel_range[1]):

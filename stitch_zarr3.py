@@ -71,15 +71,15 @@ if __name__ == "__main__":
             continue
 
         # Get the chunk's position within stitched_image
-        z_start, y_start, x_start = chunk['bbox'][0] - z_min, chunk['bbox'][1] - y_min, chunk['bbox'][2] - x_min
-        z_end, y_end, x_end = chunk['bbox'][3] - z_min, chunk['bbox'][4] - y_min, chunk['bbox'][5] - x_min
+        z_start, y_start, x_start = chunk['bbox'][0], chunk['bbox'][1], chunk['bbox'][2]
+        z_end, y_end, x_end = chunk['bbox'][3], chunk['bbox'][4], chunk['bbox'][5]
 
         # Compute chunk center
         y_center = (y_start + y_end) // 2
         x_center = (x_start + x_end) // 2
 
         # Add a point at every Z plane
-        for z in range(chunk['bbox'][0] - z_min, chunk['bbox'][3] - z_min):
+        for z in range(chunk['bbox'][0], chunk['bbox'][3]):
             chunk_positions.append([z, y_center, x_center])  # Ensure order is (Z, Y, X)
             chunk_labels.append(f'{curr_chunk_list[0]}')  # Keep the corresponding chunk label
 
